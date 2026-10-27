@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f7f6f2">
+  <meta name="description" content="按日期查阅每日资讯归档，筛选来源并搜索标题和摘要。">
+  <title>BBNS 每日简报</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/styles.css">
+  <script type="module" src="/app.mjs"></script>
+</head>
+<body>
+  <a class="skip-link" href="#articles">跳到资讯内容</a>
+  <header class="site-header">
+    <a class="brand" href="/" aria-label="BBNS 每日简报首页"><span class="brand-mark" aria-hidden="true">b</span><span class="brand-name">BBNS<span class="brand-divider"></span><span class="brand-subtitle">每日简报</span></span></a>
+    <div class="header-right"><span class="readonly-label">只读归档</span><button id="refresh" class="refresh-button" aria-label="刷新归档"><svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5M5.7 7a7 7 0 0 1 11.6-1L20 9M4 15l2.7 3A7 7 0 0 0 18.3 17" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span>刷新</span></button></div>
+  </header>
+  <noscript><p class="notice">阅读归档需要启用 JavaScript。也可查看<a href="/api/summaries">归档目录数据</a>。</p></noscript>
+  <div class="layout">
+    <aside class="sidebar" aria-label="历史归档">
+      <h2 class="sidebar-title">阅读档案</h2>
+      <div class="sidebar-heading"><p>按日期回看已生成的资讯简报。</p></div>
+      <div class="history-label"><span>按日期浏览</span><span id="day-count"></span></div>
+      <nav id="dates" class="date-list" aria-label="选择归档日期"></nav>
+      <div class="sidebar-note"><p>内容来自已生成的总结归档。<br>选择、搜索，只改变你的阅读视图。</p></div>
+    </aside>
+    <main id="reader" aria-busy="true">
+      <div id="notice" class="notice hidden" role="status"></div>
+      <section class="reader-heading">
+        <time id="document-date" class="document-date"></time>
+        <div class="title-row"><h1 id="document-title">今日简报</h1></div>
+        <div class="document-meta"><div id="document-stats">正在读取归档…</div><label id="version-label" class="version-label hidden"><span>归档版本</span><select id="versions" aria-label="选择归档版本"></select></label></div>
+      </section>
+      <section id="toolbar" class="toolbar hidden" aria-label="筛选资讯">
+        <div id="sources" class="source-filters" aria-label="来源筛选"></div>
+        <label class="search"><span>搜索资讯</span><input id="search" type="search" placeholder="标题、摘要或来源" aria-label="搜索标题或摘要" autocomplete="off"></label>
+      </section>
+      <div class="list-heading"><span id="list-title">正在载入内容</span><span id="result-count" aria-live="polite"></span></div>
+      <section id="articles" class="articles" aria-label="资讯摘要" tabindex="-1"><div class="loading-state" role="status"><div class="skeleton" aria-hidden="true"><span></span><span></span><span></span></div><p>正在打开你的简报</p></div></section>
+      <footer class="reader-footer"><span>BBNS</span><p>保留来源，专注阅读。</p><span id="footer-date"></span></footer>
+    </main>
+  </div>
+</body>
+</html>

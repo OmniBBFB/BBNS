@@ -1,0 +1,12 @@
+[Unit]
+PartOf=bbns.target
+Description=Check BBNS task plans every minute
+
+[Timer]
+OnCalendar=*-*-* *:*:00
+AccuracySec=1s
+Persistent=true
+Unit=bbns-scheduler.service
+
+[Install]
+WantedBy=bbns.target

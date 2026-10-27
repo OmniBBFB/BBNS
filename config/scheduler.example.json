@@ -1,0 +1,15 @@
+{
+  "timezone": "Asia/Shanghai",
+  "database": "data/scheduler/state.sqlite",
+  "subscriptions_config": "config/subscriptions.example.json",
+  "summary_config": "config/summary.json",
+  "messaging_config": "config/message.json",
+  "collection_directory": "data/subscriptions",
+  "summary_directory": "data/summaries",
+  "delivery_directory": "data/deliveries",
+  "target": "personal",
+  "max_attempts": 3,
+  "summary_batch_size": 20,
+  "push_lateness_minutes": 60,
+  "push_part_bytes": 1500
+}

@@ -1,0 +1,45 @@
+{
+  "sources": [
+    {
+      "id": "aihot",
+      "adapter": "aihot",
+      "enabled": true,
+      "limit": 100,
+      "recommended_collection": {
+        "timezone": "Asia/Shanghai",
+        "note": "每日资讯由调度选择时间；此配置不触发执行"
+      },
+      "options": {
+        "mode": "selected",
+        "window": "24h"
+      }
+    },
+    {
+      "id": "rqdmap",
+      "adapter": "rss",
+      "enabled": true,
+      "limit": 100,
+      "recommended_collection": {
+        "timezone": "Asia/Shanghai",
+        "note": "建议每日一次"
+      },
+      "options": {
+        "url": "https://www.rqdmap.top/index.xml"
+      }
+    },
+    {
+      "id": "github-trending",
+      "adapter": "github_trending",
+      "enabled": true,
+      "limit": 25,
+      "recommended_collection": {
+        "timezone": "Asia/Shanghai",
+        "note": "建议每日一次；榜单为获取时快照"
+      },
+      "options": {}
+    }
+  ],
+  "storage": {
+    "directory": "data/subscriptions"
+  }
+}

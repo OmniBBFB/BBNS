@@ -1,0 +1,13 @@
+[Unit]
+Description=BBNS application and read-only summary reader
+PartOf=bbns.target
+
+[Service]
+Type=exec
+WorkingDirectory=@ROOT@
+ExecStart=@NODE@ @ROOT@/src/app.mjs
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=10s
+UMask=0077
+NoNewPrivileges=true

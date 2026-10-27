@@ -1,0 +1,8 @@
+[Unit]
+Description=BBNS application
+Requires=bbns-app.service
+Wants=bbns-scheduler.timer
+After=bbns-app.service
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,35 @@
+{
+  "name": "bbns-messaging",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node tools/app-control.mjs start",
+    "test": "node --test",
+    "collect": "node src/collect.mjs",
+    "scheduler:check": "node --env-file=.env src/scheduler-cli.mjs check",
+    "scheduler:status": "node --env-file=.env src/scheduler-cli.mjs status",
+    "scheduler:tick": "node --env-file=.env src/scheduler-cli.mjs tick",
+    "scheduler:plan": "node --env-file=.env src/scheduler-cli.mjs plan",
+    "scheduler:install": "node tools/deploy-local.mjs",
+    "scheduler:manual": "node --env-file=.env tools/manual-run.mjs",
+    "messaging:start": "node --env-file=.env src/run.mjs",
+    "stop": "node tools/app-control.mjs stop",
+    "restart": "node tools/app-control.mjs restart",
+    "app:status": "node tools/app-control.mjs status",
+    "app:serve": "node src/app.mjs",
+    "app:install": "node tools/deploy-local.mjs",
+    "workflow:plan": "node --env-file=.env src/workflow-cli.mjs plan",
+    "workflow:check": "node --env-file=.env src/workflow-cli.mjs check",
+    "workflow:status": "node --env-file=.env src/workflow-cli.mjs status",
+    "workflow:tick": "node --env-file=.env src/workflow-cli.mjs tick",
+    "workflow:manual": "node --env-file=.env src/workflow-cli.mjs manual"
+  },
+  "dependencies": {
+    "@wecom/aibot-node-sdk": "latest",
+    "cheerio": "^1.2.0",
+    "fast-xml-parser": "^5.11.2"
+  },
+  "engines": {
+    "node": ">=22.13.0"
+  }
+}

@@ -1,0 +1,8 @@
+.env
+.env.*
+!.env.example
+config/*.local.json
+node_modules/
+
+data/
+config/message.json

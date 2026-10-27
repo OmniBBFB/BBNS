@@ -1,0 +1,14 @@
+{
+  "input": {
+    "path": "data/subscriptions/messages.jsonl"
+  },
+  "output": {
+    "directory": "data/summaries"
+  },
+  "client": {
+    "baseUrl": "https://api.deepseek.com",
+    "model": "deepseek-flash",
+    "timeoutMs": 120000,
+    "maxTokens": 8192
+  }
+}

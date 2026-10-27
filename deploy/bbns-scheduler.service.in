@@ -1,0 +1,15 @@
+[Unit]
+PartOf=bbns.target
+Description=BBNS daily collection summary and delivery scheduler
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=@ROOT@
+ExecStart=@NODE@ --env-file=@ROOT@/.env @ROOT@/src/scheduler-cli.mjs tick @ROOT@/config/scheduler.local.json
+TimeoutStartSec=25min
+TimeoutStopSec=30s
+KillMode=control-group
+UMask=0077
+NoNewPrivileges=true

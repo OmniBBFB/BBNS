@@ -1,0 +1,22 @@
+{
+  "adapter": {
+    "id": "wecom-main",
+    "type": "wecom_aibot",
+    "credentials": {
+      "bot_id_env": "WECOM_BOT_ID",
+      "secret_env": "WECOM_BOT_SECRET"
+    }
+  },
+  "push": {
+    "targets": {
+      "personal": {
+        "adapter_id": "wecom-main",
+        "recipient_id": ""
+      }
+    }
+  },
+  "inbound": {
+    "handler": "static",
+    "reply_text": "todo"
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "scanned": "2026-10-26",
+  "findings": {
+    "fonts": "system sans body and Georgia mark, web/styles.css :root",
+    "palette": "existing warm paper and clay accent, darkened for contrast",
+    "framework": "vanilla ESM and Node read-only reader",
+    "scope": "app screen polish; existing date rail and archive wiring retained"
+  },
+  "preserve": [
+    "archive layout",
+    "source order",
+    "routes and API",
+    "warm reading palette"
+  ],
+  "introduce": [
+    "central color and font tokens",
+    "readable 16px body and 14px controls",
+    "URL filter restoration",
+    "accurate empty and error states"
+  ]
+}

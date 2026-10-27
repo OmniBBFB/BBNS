@@ -1,0 +1,5 @@
+{
+  "host": "127.0.0.1",
+  "port": 3080,
+  "scheduler_config": "config/scheduler.local.json"
+}

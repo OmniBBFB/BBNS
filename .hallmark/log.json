@@ -1,0 +1,29 @@
+[
+ {
+  "mode": "redesign",
+  "depth": "polish",
+  "scope": "app",
+  "shape": "existing archive reader",
+  "theme": "project warm palette",
+  "axes": "existing shell retained",
+  "hero": "none, app scope",
+  "nav": "existing date archive",
+  "footer": "existing reader footer",
+  "imagery": "none, real archived text",
+  "photos": [],
+  "entry": "web/index.html",
+  "fingerprint": "existing archive/sidebar/filter/list",
+  "sections": [
+   "archive",
+   "reader",
+   "filters",
+   "articles"
+  ],
+  "signature": "dated archive with explicit source labels",
+  "waived": [
+   "49b: preserve full source article titles on phone"
+  ],
+  "prompt": "Apply Hallmark best practices to the current BBNS frontend",
+  "date": "2026-10-26"
+ }
+]
