@@ -1,5 +1,7 @@
 # 本地部署记录
 
+> 当前生产运行位置已于 2026-10-28 迁移至服务器 Docker，公开入口 https://news.omnibbfb.top。本机 bbns.target、scheduler timer 已停止并停用；以下为本地历史记录。当前服务器部署见 [服务器部署](server-deployment.md)。
+
 部署位置：/home/csc/app/BBNS。验收日期：2026-10-23，时区 Asia/Shanghai。
 
 已安装并启用当前用户的 bbns-scheduler.timer，状态 active/enabled；每分钟唤醒一次，已观察到 17:35 的自动触发。bbns-scheduler.service 首次及自动执行均 Result=success、ExecMainStatus=0。Linger=yes，支持注销后运行。

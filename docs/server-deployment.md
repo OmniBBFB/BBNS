@@ -61,3 +61,13 @@ bash bbns/activate-image.sh bbns:<旧版本>
 备份时停止 worker，确认没有其他写入者，打包整个 `bbns/data`（含 SQLite sidecar）和私有配置，再恢复 worker。读库处于 WAL 模式时网页进程可能需要已有的 SHM 文件；迁移、恢复或启用 v2 时先由 worker/check 初始化数据库再启动网页。离机备份自行保存在私有位置，不上传公共产物。
 
 本机服务在切换后保持停用。若恢复本机，先停止服务器 worker，迁回最新数据及发送回执后再启动，禁止两处同时运行或用旧备份重推。
+
+## 2026-10-28 上线验收
+
+- 首个生产镜像 `bbns:20261028-deploy1`，Node 24；主 Compose 中两个服务均已启动，web 健康。
+- 309 个数据文件复制前后 SHA256 一致，SQLite 完整性检查通过；保留今日已成功推送的账本，没有通过迁移重新发送。
+- 服务器容器使用实际配置调用 `deepseek-flash` 成功，返回有效 JSON；本次 prompt 63、completion 27、total 90 tokens。
+- 外网 HTTPS 首页、健康接口、目录与日报详情均 200；目录可读 7 份日报、不可用 0，最新为 10 月 28 日 18 条。私有文件路径 404，POST 405。
+- 网页容器数据只读、无 API/Bot 凭据、无宿主机端口映射；worker 单实例按现有 scheduler 配置运行，v2 未切换。
+- 全部 61 测试通过；[首次 GitHub CI](https://github.com/OmniBBFB/BBNS/actions/runs/40631838827) 成功构建并保存镜像产物。
+- 服务器首次配置备份：`/root/docker/main/bbns/backups/20261028T035800Z`。本机完整迁移副本：`/tmp/bbns-server-migration-mbxvmrv9`，原始 data 也保留；tmp 副本不作为长期备份。
