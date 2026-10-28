@@ -1,0 +1,37 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  test-and-image:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - name: Validate deployment configuration
+        run: BBNS_IMAGE=bbns:ci docker compose -f deploy/compose.yml config --no-env-resolution --quiet
+      - name: Build release image
+        run: docker build --tag bbns:${{ github.sha }} .
+      - name: Save image for SSH upload
+        if: github.event_name != 'pull_request'
+        run: docker save bbns:${{ github.sha }} | gzip > bbns-image.tar.gz
+      - uses: actions/upload-artifact@v4
+        if: github.event_name != 'pull_request'
+        with:
+          name: bbns-image-${{ github.sha }}
+          path: bbns-image.tar.gz
+          compression-level: 0
+          retention-days: 7

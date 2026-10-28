@@ -28,3 +28,5 @@
 新流程配置示例为 `config/workflow.example.json`，入口为 `src/workflow-cli.mjs`。它已提供开发实现，尚未替换已部署定时服务；切换步骤见部署记录。
 
 [本轮开发验证](verification-20261027.md)：离线测试、浏览器验收、窗口回放及未验证范围。
+
+[Docker 服务器部署](server-deployment.md)：CI、镜像、公开域名、持久化与迁移。

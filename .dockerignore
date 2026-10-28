@@ -1,0 +1,11 @@
+*
+!package.json
+!package-lock.json
+!src/
+!src/**
+!web/
+!web/**
+!tools/
+!tools/container-worker.mjs
+!tools/check-provider.mjs
+!Dockerfile

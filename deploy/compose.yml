@@ -1,0 +1,45 @@
+# Project directory is ~/docker/main; this file lives at bbns/compose.yml there.
+# Services can also be merged into the existing main docker-compose.yml.
+services:
+  bbns-web:
+    image: ${BBNS_IMAGE:?Set BBNS_IMAGE to an immutable release tag}
+    init: true
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs: [/tmp]
+    volumes:
+      - ./bbns/config:/app/config:ro
+      - ./bbns/data:/app/data:ro
+    networks: [nginx_net]
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:3080/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+    logging:
+      driver: json-file
+      options: {max-size: 10m, max-file: '3'}
+  bbns-worker:
+    image: ${BBNS_IMAGE:?Set BBNS_IMAGE to an immutable release tag}
+    init: true
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs: [/tmp]
+    command: [node, tools/container-worker.mjs, config/scheduler.local.json]
+    env_file: [./bbns/.env]
+    volumes:
+      - ./bbns/config:/app/config:ro
+      - ./bbns/data:/app/data
+    networks: [nginx_net]
+    stop_grace_period: 60s
+    logging:
+      driver: json-file
+      options: {max-size: 10m, max-file: '3'}
+networks:
+  nginx_net:
+    external: true
