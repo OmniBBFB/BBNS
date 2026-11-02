@@ -71,3 +71,12 @@ bash bbns/activate-image.sh bbns:<旧版本>
 - 网页容器数据只读、无 API/Bot 凭据、无宿主机端口映射；worker 单实例按现有 scheduler 配置运行，v2 未切换。
 - 全部 61 测试通过；[首次 GitHub CI](https://github.com/OmniBBFB/BBNS/actions/runs/40631838827) 成功构建并保存镜像产物。
 - 服务器首次配置备份：`/root/docker/main/bbns/backups/20261028T035800Z`。本机完整迁移副本：`/tmp/bbns-server-migration-mbxvmrv9`，原始 data 也保留；tmp 副本不作为长期备份。
+
+## 2026-11-02 来源失败隔离上线
+
+- 修复版本 `9fee57b`，生产镜像 `bbns:20261102-source-failures`。68 项测试通过，含真实调度、采集与总结适配器、投递回执的故障注入测试；Node 24 镜像模块加载检查通过。
+- [修复版本 GitHub CI](https://github.com/OmniBBFB/BBNS/actions/runs/41377511185) 已成功完成测试、Compose 校验和镜像构建。
+- 总结等待来源结束后只使用成功来源材料；失败来源继续保留失败状态，网页和日报推送明确说明原因。每源独立失败通知通过现有企业微信目标发送；通知失败不阻断日报，accepted 和 unknown 均沿用防重发机制。
+- 停止 worker 后备份完整数据、配置和凭据至 `/root/docker/main/bbns/backups/source-isolation-20261102T022638Z/data-config.tgz`，主 Compose `.env` 同目录备份；已有归档与采集文件上线后 SHA256 全部一致。
+- 显式恢复当天从未启动的 summarize/push，保留来源结果、失败次数、任务 ID 和投递截止时间。11 月 2 日归档已生成且公网 API 可读，GitHub 来源为 TIMEOUT、3 次；其他两源成功但当日条目均为 0。日报推送已超过 10:15，保持 expired，未跨期限补发。
+- 独立 GitHub 失败通知成功，渠道回执 accepted 且有 provider_reference；后续 tick 不重发。web healthy，worker 持续运行，公开浏览器状态模块返回 200。11 月 1 日历史任务未改动。
