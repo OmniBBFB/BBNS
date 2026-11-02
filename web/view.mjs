@@ -1,4 +1,5 @@
 /** Pure view functions: archived model + local UI state -> escaped markup. */
+import { sourceFailureText } from './source-status.mjs';
 const sourceNames = new Map([['aihot', 'AIHOT'], ['github-trending', 'GitHub Trending'], ['rqdmap', 'rqdmap 博客']]);
 export const sourceName = id => sourceNames.get(id) ?? id;
 export const escape = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
@@ -36,9 +37,9 @@ export function renderSources(view, selected) {
     escape(source.id === 'all' ? '全部资讯' : sourceName(source.id)) + '<span>' + source.count + '</span></button>').join('');
 }
 export function renderArticles(view) {
-  const notices = (view.reports ?? []).filter(report => report.count === 0).map(report =>
+  const notices = (view.reports ?? []).filter(report => report.status === 'failed' || report.count === 0).map(report =>
     '<p class="source-notice" role="status">' + escape(sourceName(report.source_id)) +
-    (view.edition ? '：本期无新增可用内容（已编入 ' + escape(report.counts?.already_issued ?? 0) + '，首次存量 ' + escape(report.counts?.initial_history ?? 0) + '）' : '：无当日可用内容（历史 ' + escape(report.counts?.other_date ?? 0) +
+    (report.status === 'failed' ? '：' + escape(sourceFailureText(report)) : view.edition ? '：本期无新增可用内容（已编入 ' + escape(report.counts?.already_issued ?? 0) + '，首次存量 ' + escape(report.counts?.initial_history ?? 0) + '）' : '：无当日可用内容（历史 ' + escape(report.counts?.other_date ?? 0) +
     '，无日期 ' + escape(report.counts?.undated ?? 0) + '）') + '</p>').join('');
   if (!view.items.length && !view.filtered) return notices + '<div class="empty-state"><h2>本期暂无资讯</h2><p>本期归档没有可阅读的条目。可选择其他日期，或稍后刷新归档。</p></div>';
   if (!view.items.length) return notices + '<div class="empty-state"><h2>没有找到匹配的资讯</h2><p>试试其他关键词，或查看全部来源。</p><button class="text-button" data-clear>清除筛选</button></div>';

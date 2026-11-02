@@ -12,12 +12,12 @@
 
 默认时区 Asia/Shanghai。每个启用来源优先采用 recommended_collection.time（HH:mm）和 timezone，没有 time 时每天 08:00。note 是人工说明，不解析为时间。目前示例配置均没有明确时间，所以全部回退 08:00。
 src/scheduling.mjs 的 dailyPlans 是纯函数，只生成计划，不自动执行。
-总结每天 08:00 起具备执行资格，等待同期采集任务成功；推送每天 09:15 起具备资格，等待同期归档。若推荐采集晚于 08:00，总结等待；晚于 09:15 则当天准时推送无法满足，必须报告依赖未就绪，不能取昨天文档冒充。
-首版仅处理当天、单任务串行、不自动跨日补发；默认所有来源成功才总结。推送截止时间通过 push_lateness_minutes 配置；partial 策略尚未开放。
+总结每天 08:00 起具备执行资格，等待同期采集任务结束（成功或最终失败），只处理成功来源的当日材料；推送每天 09:15 起具备资格，等待同期归档。若推荐采集晚于 08:00，总结等待；晚于 09:15 则当天准时推送无法满足，不能取昨天文档冒充。
+仅处理当天、单任务串行、不自动跨日补发。一个来源失败不阻断其他来源的采集、总结、发布与推送。推送截止时间通过 push_lateness_minutes 配置。
 
 ## 执行协议
 
-handler.execute({run_id, occurrence_id, business_date, scheduled_at, attempt, input_refs, config_ref, signal})
+handler.execute({run_id, occurrence_id, business_date, scheduled_at, attempt, input_refs, dependency_runs, config_ref, signal})
 返回 {status, output_refs, error}；status 是 succeeded / partial / failed / unknown。
 business_date 按工作流时区从计划期次确定，重试跨午夜仍保持不变。run_id 标识执行实例，attempt 标识尝试；occurrence_id 标识计划期次。各来源与总结/推送通过同一个工作流期次关联，不能用不同日期的最近成功结果满足依赖。
 output_refs 是 {kind, id?, path?, business_date} 的引用列表，调度器只保存，不解析正文。来源与投递回执细节由适配层保存为独立诊断产物。
@@ -27,7 +27,7 @@ output_refs 是 {kind, id?, path?, business_date} 的引用列表，调度器只
 1. 依赖适配器：识别网络、HTTP、超时及响应格式错误，释放资源，失败抛出带 fault 的原异常。
 2. 模块边界：隔离单源失败；校验失败不发布总结；存储使用完整文件原子发布。失败不能伪装成空成功。
 3. 执行层：统一使用 errors.mjs 的 retryDecision 计算下一次尝试；该工具不 sleep、不自动调用模块。
-4. 调度账本：保存 attempt、next_attempt_at、deadline、产物和错误；重启后恢复。告警订阅状态事件，不修改核心流程。
+4. 调度账本：保存 attempt、next_attempt_at、deadline、产物和错误；重启后恢复。来源失败通知使用独立持久任务，不依赖内存状态事件或日报生成成功。
 
 fault/error 字段：
 schema_version=1、code、category、operation、retryable、outcome、message、http_status、retry_after_ms。
@@ -48,7 +48,7 @@ CollectionExecutor 的 results[].error 直接包含协议字段，并保留 retr
 
 建议默认最多 3 次尝试（含首次），指数退避加抖动；Retry-After 支持秒和 HTTP 日期，是最短等待值，不被退避上限截短。超过截止时间或次数直接失败。
 禁止模块内部循环重试后再被调度器重复重试。取消必须传播给外部 I/O；仅 Promise.race 不能证明操作停止。采集执行器、来源 HTTP 请求、总结与推理请求已支持外部 signal；自定义适配器须遵守取消约定。文件原子发布阶段不强制中断，企微 SDK 发送仍需按结果未知处理，不能因此重入仍在运行的任务。
-单源失败仅重试失败来源；成功来源引用复用。默认总结等待所有来源成功，partial 策略由工作流显式配置。
+单源失败仅重试失败来源；成功来源引用复用。dailyPlans 的总结明确使用 dependency_policy=settled，等待来源重试结束后继续生成；其他未声明策略的阶段仍要求全部依赖成功。
 模型请求重试可能重复计费；不承诺第三方调用恰好一次。推送 accepted 仅指渠道接受。
 
 ## 本地按天存储
@@ -116,7 +116,7 @@ systemctl --user stop bbns-scheduler.service
 SQLite 对每个 business_date/task_id 使用唯一约束，计划快照在首次创建期次时固化；当天已创建的任务不会被新配置静默改写。采集/推理配置由适配层从本地读取，业务日关联与执行时间由账本固化。
 全局执行锁记录 Linux boot_id、PID 和进程启动时间，存活进程不被基于时间的租约强行抢占；检测到旧进程确实退出后才恢复。只支持本机，不支持共享文件系统多机调度。
 状态：pending / running / retry_wait / succeeded / partial / failed / blocked / unknown / expired。
-失败依赖会阻断下游；只用同一天成功产物。重试时间持久化，最多 3 次尝试。正常 SIGTERM 的合作式取消保存为可恢复尝试，仍受次数和截止时间限制。
+默认失败依赖会阻断下游；显式声明 dependency_policy=settled 的阶段等待所有依赖结束，允许接收失败状态，仍只传递同一天成功产物。dependency_runs 提供依赖任务 ID、handler、config_ref、业务日、状态、次数和错误码，不传原始错误文本。重试时间持久化，最多 3 次尝试。正常 SIGTERM 的合作式取消保存为可恢复尝试，仍受次数和截止时间限制。
 采集与总结截止到工作流当日结束。推送默认最晚 10:15（09:15 后 60 分钟，可配置 push_lateness_minutes），到期不发送；不跨日补发、不自动重试 unknown。
 计划按分钟精度运行，系统负载和网络会影响实际完成时间；不承诺秒级投递。
 
@@ -152,7 +152,11 @@ Scheduler 只执行当前注册计划的 task_id；所有入口共享同一进�
 
 自动和手动日报均使用 todayCollectionHandler：保留原始采集批次，按业务日筛选文章 published_at、榜单 observed_at，排除无日期条目。在选中条目内，按 source_id、source_item_id（缺省回退 URL）、kind 去重；没有稳定键时保留，不按标题猜测。UUID 仅用于抓取追踪。每日榜单跨日不去重。没有新增的 RSS 不再每天重发旧文。这是当日日报策略，不是跨历史已读账本；凌晨前发布或无日期的内容不会补发。
 
-selection 报告统计 fetched、selected、other_date、undated、duplicates（出现重复时）。source_reports 随总结归档并通过阅读 API 提供；空来源在网页与推送说明，全部为空也归档通知且不调用模型。推送每条附来源 ID，网页沿用已有来源标签。采集失败输出 collection.failed 结构化日志（来源、业务日、错误码、操作），仍按既有规则重试，最终失败阻断总结，不伪装成无新增。
+selection 报告统计 fetched、selected、other_date、undated、duplicates（出现重复时）。source_reports 随总结归档并通过阅读 API 提供；空来源在网页与推送说明，全部为空也归档通知且不调用模型。推送每条附来源 ID，网页沿用已有来源标签。采集失败输出 collection.failed 结构化日志（来源、业务日、错误码、操作），仍按既有规则重试。重试耗尽后，该来源保持 failed，总结仅使用成功来源；失败来源以 status=failed、count=null、error_code、attempt 进入归档，不伪装成无新增。无可用材料且存在失败来源时归档标题标明“采集异常”，不调用模型。
+
+自动/手动日报额外为每个来源装配 notify:collect:<source-id> 独立任务。任务等待该来源结束；成功时静默完成，最终失败后通过现有企业微信目标发送业务日期、来源、失败原因和尝试次数。失败通知本身不作为总结或日报推送的依赖；通知失败不能阻断内容链路。通知文档和发送回执分别保存在 delivery_directory/source-notices 和 source-notice-receipts，沿用逐块持久意图、accepted 复用及 unknown 不重发规则。网页及推送只展示安全原因描述，不暴露原始错误、凭据或路径。
+
+新策略不静默改写已有计划。部署时停止 worker、备份整个 data 后，可执行 `node tools/recover-source-failure-policy.mjs config/scheduler.local.json` 预览，仅加 `--apply` 才恢复当天因 DEPENDENCY_FAILED 阻断且从未启动的 summarize/push。保留任务 ID、输入引用、来源失败次数和原投递截止时间；已开始/已成功/unknown 的发送与历史业务日不改动。恢复工具本身不采集、不调用模型、不发送。
 
 历史归档不可变，不补写来源诊断、不重新发送。调度 CLI 在后续 tick 加载新代码。
 

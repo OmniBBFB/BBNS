@@ -104,7 +104,9 @@ test('retry timing is persisted and failed dependencies are blocked instead of c
     summarize: { execute: async () => { throw new Error('must not run'); } },
     push: { execute: async () => { throw new Error('must not run'); } }
   };
-  const scheduler = new Scheduler({ ledger, plans: plans([source()]), handlers, clock: () => now, random: () => 0 });
+  // Strict dependencies remain the engine default for stages that require complete inputs.
+  const strictPlans = plans([source()]).map(plan => ({ ...plan, dependency_policy: 'succeeded' }));
+  const scheduler = new Scheduler({ ledger, plans: strictPlans, handlers, clock: () => now, random: () => 0 });
   await scheduler.tick(); await scheduler.tick();
   assert.equal(calls, 1);
   assert.equal(Date.parse(ledger.rows(day)[0].next_attempt_at), now + 120000);

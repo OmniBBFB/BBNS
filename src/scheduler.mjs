@@ -35,6 +35,8 @@ export function validatePlans(plans) {
     if (plan.recovery !== 'retry' && plan.recovery !== 'unknown') throw invalid('Invalid recovery policy', 'schedule.config');
     if (!Number.isInteger(plan.timeout_ms) || plan.timeout_ms < 1) throw invalid('Invalid task timeout', 'schedule.config');
     if (!Number.isInteger(plan.max_attempts) || plan.max_attempts < 1) throw invalid('Invalid attempt budget', 'schedule.config');
+    if (plan.dependency_policy != null && !['succeeded', 'settled'].includes(plan.dependency_policy))
+      throw invalid('Invalid dependency policy', 'schedule.config');
   }
   const visit = (id, stack = new Set(), done = new Set()) => {
     if (stack.has(id)) throw invalid('Cyclic task dependency', 'schedule.config');
@@ -49,6 +51,7 @@ export function validatePlans(plans) {
 }
 
 const terminalFailure = new Set(['failed', 'blocked', 'unknown', 'expired', 'partial']);
+const settled = status => status === 'succeeded' || terminalFailure.has(status);
 function stateError(code, outcome = 'not_completed') {
   return { schema_version: 1, code, category: 'internal', operation: 'scheduler',
     retryable: false, outcome, message: code, http_status: null, retry_after_ms: null };
@@ -117,11 +120,12 @@ export class Scheduler extends EventEmitter {
             this.finish(row, 'expired', { error: stateError('DEADLINE_EXCEEDED') }); progress = true; continue;
           }
           const dependencies = row.plan.depends_on.map(id => activeRows().find(other => other.task_id === id));
-          if (dependencies.some(other => other && terminalFailure.has(other.status))) {
+          const acceptFailures = row.plan.dependency_policy === 'settled';
+          if (!acceptFailures && dependencies.some(other => other && terminalFailure.has(other.status))) {
             this.finish(row, 'blocked', { error: stateError('DEPENDENCY_FAILED') }); progress = true; continue;
           }
           if (Date.parse(row.scheduled_at) > current || (row.next_attempt_at && Date.parse(row.next_attempt_at) > current) ||
-              dependencies.some(other => other?.status !== 'succeeded')) continue;
+              dependencies.some(other => !other || (acceptFailures ? !settled(other.status) : other.status !== 'succeeded'))) continue;
           const claimed = this.ledger.claim(row.run_id, new Date(current).toISOString());
           if (!claimed) continue;
           this.notify(claimed);
@@ -132,7 +136,11 @@ export class Scheduler extends EventEmitter {
             result = await this.handlers[row.plan.handler].execute({
               run_id: row.run_id, occurrence_id: row.occurrence_id, business_date: day,
               scheduled_at: row.scheduled_at, attempt: claimed.attempt, parameters: row.plan.parameters ?? null,
-              input_refs: dependencies.flatMap(other => other.output_refs), config_ref: row.plan.config_ref, signal: taskSignal
+              input_refs: dependencies.filter(other => other.status === 'succeeded').flatMap(other => other.output_refs),
+              dependency_runs: dependencies.map(other => ({ task_id: other.task_id, handler: other.plan.handler,
+                config_ref: other.plan.config_ref, business_date: other.business_date, status: other.status,
+                attempt: other.attempt, error_code: other.error?.code ?? null })),
+              config_ref: row.plan.config_ref, signal: taskSignal
             });
             if (!result || !['succeeded', 'partial', 'failed', 'unknown'].includes(result.status) ||
                 (['succeeded', 'partial'].includes(result.status) && !Array.isArray(result.output_refs)))

@@ -8,6 +8,7 @@ const assets = new Map([
   ['/styles.css', ['../web/styles.css', 'text/css; charset=utf-8']],
   ['/app.mjs', ['../web/app.mjs', 'text/javascript; charset=utf-8']],
   ['/view.mjs', ['../web/view.mjs', 'text/javascript; charset=utf-8']],
+  ['/source-status.mjs', ['../web/source-status.mjs', 'text/javascript; charset=utf-8']],
   ['/favicon.svg', ['../web/favicon.svg', 'image/svg+xml']]
 ]);
 const headers = {

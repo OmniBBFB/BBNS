@@ -10,6 +10,8 @@ import { readSourceFile, SummaryGenerator, LocalSummaryStore } from './summary.m
 import { Messaging, WecomAdapter } from './messaging.mjs';
 import { summaryText, materialLabel } from './summary-text.mjs';
 import { boundary, fault, invalid } from './errors.mjs';
+import { sourceFailureReports } from './source-reports.mjs';
+import { sourceFailureText } from '../web/source-status.mjs';
 
 async function optional(path) {
   try { return await readFile(path, 'utf8'); } catch (error) { if (error.code === 'ENOENT') return null; throw error; }
@@ -33,7 +35,7 @@ export function collectionHandler({ subscriptions, directory, adapters = default
       if (existing !== null) {
         // An empty batch is a valid successful collection, but cannot be summarized.
         if (existing.trim()) await readSourceFile(path);
-        return succeeded([{ kind: 'collection', path, business_date: day }]);
+        return succeeded([{ kind: 'collection', path, business_date: day, source_id: context.config_ref }]);
       }
       const requests = subscriptions.requests([context.config_ref]);
       if (!requests.length) throw invalid('Scheduled source is disabled or missing', 'task.collect');
@@ -46,7 +48,7 @@ export function collectionHandler({ subscriptions, directory, adapters = default
       }
       signal?.throwIfAborted();
       const saved = await new DailyMessageStore(directory, { businessDate: day }).save(result.messages, { runId: id });
-      return succeeded([{ kind: 'collection', path: saved.path, business_date: day }]);
+      return succeeded([{ kind: 'collection', path: saved.path, business_date: day, source_id: context.config_ref }]);
     }, { signal });
   } };
 }
@@ -65,11 +67,12 @@ export function summaryHandler({ directory, collectionDirectory, client, batchSi
         return succeeded([{ kind: 'summary', id, path: finalPath, business_date: day }]);
       }
       const refs = context.input_refs.filter(ref => ref.kind === 'collection');
-      if (!refs.length || refs.some(ref => ref.business_date !== day)) throw invalid('Missing same-day input batches', 'task.summary');
+      const failures = sourceFailureReports(context);
+      if ((!refs.length && !failures.length) || refs.some(ref => ref.business_date !== day)) throw invalid('Missing same-day input batches', 'task.summary');
       const sourceReports = refs.filter(ref => ref.source_id).map(ref => ({
         source_id: ref.source_id, count: ref.counts?.selected ?? null,
         status: ref.counts?.selected === 0 ? 'empty' : 'succeeded', counts: ref.counts ?? null
-      }));
+      })).concat(failures);
       const inputPath = join(collectionDirectory, day, id + '-input.jsonl');
       if (await optional(inputPath) === null) {
         const inputs = [];
@@ -80,7 +83,7 @@ export function summaryHandler({ directory, collectionDirectory, client, batchSi
         }
         if (!inputs.length) {
           const saved = await store.save({ schema_version: 1, id, created_at: new Date().toISOString(),
-            title: day + ' 日报：暂无当日资讯', items: [], source_reports: sourceReports });
+            title: day + (failures.length ? ' 日报：采集异常，暂无可用资讯' : ' 日报：暂无当日资讯'), items: [], source_reports: sourceReports });
           return succeeded([{ kind: 'summary', id, path: saved.path, business_date: day }]);
         }
         await mkdir(join(collectionDirectory, day), { recursive: true });
@@ -124,8 +127,8 @@ export function renderSummary(document, maxBytes = 1500) {
   if (!Number.isInteger(maxBytes) || maxBytes < 32 || maxBytes > 2000) throw invalid('Invalid push part limit', 'task.push.config');
   if (!document?.title || !Array.isArray(document.items)) throw invalid('Invalid summary document', 'task.push.render');
   const editionNotice = document.edition ? '\n覆盖：' + document.edition.window_start + ' 至 ' + document.edition.window_end : '';
-  const notices = (document.source_reports ?? []).filter(report => report.count === 0).map(report =>
-    '[' + report.source_id + '] ' + (document.schema_version === 2 ? '本期无新增可用内容（已编入 ' + (report.counts?.already_issued ?? 0) + '，首次存量 ' + (report.counts?.initial_history ?? 0) + '）' : '无当日可用内容（历史 ' + (report.counts?.other_date ?? 0) +
+  const notices = (document.source_reports ?? []).filter(report => report.status === 'failed' || report.count === 0).map(report =>
+    '[' + report.source_id + '] ' + (report.status === 'failed' ? sourceFailureText(report) : document.schema_version === 2 ? '本期无新增可用内容（已编入 ' + (report.counts?.already_issued ?? 0) + '，首次存量 ' + (report.counts?.initial_history ?? 0) + '）' : '无当日可用内容（历史 ' + (report.counts?.other_date ?? 0) +
     '，无日期 ' + (report.counts?.undated ?? 0) + '）')).join('\n');
   const text = document.title + editionNotice + (notices ? '\n' + notices : '') + '\n\n' + document.items.map((item, index) =>
     (index + 1) + '. [' + item.source.source_id + '] ' + item.source.title + (materialLabel(item.source.content?.completeness) ? '\n' + materialLabel(item.source.content.completeness) : '') + '\n' + summaryText(item.summary, item.source.content?.completeness) +
@@ -143,6 +146,26 @@ export function renderSummary(document, maxBytes = 1500) {
   }
   if (part) parts.push(part);
   return parts;
+}
+
+/** A separate task reuses delivery receipts so a crash cannot replay an alert. */
+export function sourceFailureHandler({ directory, deliveryDirectory, target, connect, partBytes = 1500, intervalMs = 3000 }) {
+  const push = pushHandler({ summaryDirectory: directory, deliveryDirectory, target, connect, partBytes, intervalMs });
+  return { async execute(context) {
+    return boundary('task.source_failure', async () => {
+      const failures = sourceFailureReports(context);
+      if (!failures.length) return succeeded([]);
+      const { business_date: day, run_id: id } = context;
+      const store = new LocalSummaryStore(directory, { businessDate: day });
+      const path = join(directory, day, id + '.json');
+      if (await optional(path) === null) {
+        context.signal?.throwIfAborted();
+        await store.save({ schema_version: 1, id, created_at: new Date().toISOString(),
+          title: day + ' 来源采集失败通知', items: [], source_reports: failures });
+      }
+      return push.execute({ ...context, input_refs: [{ kind: 'summary', id, path, business_date: day }] });
+    }, { signal: context.signal });
+  } };
 }
 
 export function wecomConnection(config, env = process.env) {

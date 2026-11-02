@@ -10,7 +10,7 @@ COPY --from=dependencies /app/node_modules ./node_modules
 COPY package.json ./
 COPY src ./src
 COPY web ./web
-COPY tools/container-worker.mjs tools/check-provider.mjs ./tools/
+COPY tools/container-worker.mjs tools/check-provider.mjs tools/recover-source-failure-policy.mjs ./tools/
 USER node
 EXPOSE 3080
 CMD ["node", "src/app.mjs"]

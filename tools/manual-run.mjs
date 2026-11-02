@@ -4,11 +4,11 @@ import { randomUUID } from 'node:crypto';
 import { setTimeout as delay } from 'node:timers/promises';
 import { SchedulerLedger } from '../src/scheduler-ledger.mjs';
 import { Scheduler } from '../src/scheduler.mjs';
-import { dailyPlans } from '../src/scheduling.mjs';
+import { dailyPlans, sourceFailurePlans } from '../src/scheduling.mjs';
 import { businessDay, publish } from '../src/daily-store.mjs';
 import { Subscriptions } from '../src/subscriptions.mjs';
 import { DeepSeekClient } from '../src/deepseek-client.mjs';
-import { summaryHandler, pushHandler, wecomConnection } from '../src/task-handlers.mjs';
+import { summaryHandler, pushHandler, sourceFailureHandler, wecomConnection } from '../src/task-handlers.mjs';
 import { todayCollectionHandler } from '../src/today-collection.mjs';
 import { fault, invalid } from '../src/errors.mjs';
 
@@ -30,10 +30,11 @@ try {
     const id = randomUUID(), day = businessDay(new Date(), config.timezone);
     const time = new Intl.DateTimeFormat('en-GB', { timeZone: config.timezone, hourCycle: 'h23', hour: '2-digit', minute: '2-digit' }).format(new Date());
     const prefix = 'manual:' + id + ':';
-    const plans = dailyPlans(subscriptions.list(), { timezone: config.timezone }).map(plan => ({
+    const daily = dailyPlans(subscriptions.list(), { timezone: config.timezone });
+    const plans = [...daily, ...sourceFailurePlans(daily)].map(plan => ({
       ...plan, task_id: prefix + plan.task_id, depends_on: plan.depends_on.map(id => prefix + id),
       time, timezone: config.timezone, max_attempts: config.max_attempts ?? 3, lateness_ms: 3600000,
-      timeout_ms: plan.handler === 'collect' ? 180000 : 900000, recovery: plan.handler === 'push' ? 'unknown' : 'retry'
+      timeout_ms: plan.handler === 'collect' ? 180000 : 900000, recovery: ['push', 'notify_source_failure'].includes(plan.handler) ? 'unknown' : 'retry'
     }));
     manifest = { id, business_date: day, created_at: new Date().toISOString(), mode: 'manual_today', plans };
     const directory = resolve('data/scheduler/manual', day);
@@ -46,6 +47,10 @@ try {
     collect: todayCollectionHandler({ subscriptions, directory: resolve(config.collection_directory), timezone: config.timezone }),
     summarize: summaryHandler({ directory: resolve(config.summary_directory), collectionDirectory: resolve(config.collection_directory),
       client: new DeepSeekClient({ ...summaryConfig.client, apiKey: process.env.DEEPSEEK_API_KEY }), batchSize: config.summary_batch_size ?? 20 }),
+    notify_source_failure: sourceFailureHandler({ directory: resolve(config.delivery_directory, 'source-notices'),
+      deliveryDirectory: resolve(config.delivery_directory, 'source-notice-receipts'), target: config.target,
+      partBytes: config.push_part_bytes ?? 1500, intervalMs: config.push_interval_ms ?? 3000,
+      connect: () => wecomConnection(messagingConfig) }),
     push: pushHandler({ summaryDirectory: resolve(config.summary_directory), deliveryDirectory: resolve(config.delivery_directory),
       target: config.target, partBytes: config.push_part_bytes ?? 1500, intervalMs: config.push_interval_ms ?? 3000,
       connect: () => wecomConnection(messagingConfig) })

@@ -8,4 +8,5 @@
 !tools/
 !tools/container-worker.mjs
 !tools/check-provider.mjs
+!tools/recover-source-failure-policy.mjs
 !Dockerfile

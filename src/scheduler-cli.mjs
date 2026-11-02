@@ -1,13 +1,13 @@
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { businessDay, validateDay } from './daily-store.mjs';
-import { dailyPlans } from './scheduling.mjs';
+import { dailyPlans, sourceFailurePlans } from './scheduling.mjs';
 import { Scheduler, scheduledInstant, validatePlans } from './scheduler.mjs';
 import { SchedulerLedger } from './scheduler-ledger.mjs';
 import { Subscriptions } from './subscriptions.mjs';
 import { DeepSeekClient } from './deepseek-client.mjs';
 import { todayCollectionHandler } from './today-collection.mjs';
-import { summaryHandler, pushHandler, wecomConnection } from './task-handlers.mjs';
+import { summaryHandler, pushHandler, sourceFailureHandler, wecomConnection } from './task-handlers.mjs';
 import { fault, invalid } from './errors.mjs';
 
 const readJson = async path => JSON.parse(await readFile(resolve(path), 'utf8'));
@@ -19,10 +19,11 @@ try {
   const config = await readJson(configPath);
   const subscriptionsConfig = await readJson(config.subscriptions_config);
   const subscriptions = new Subscriptions(subscriptionsConfig.sources);
-  const plans = dailyPlans(subscriptions.list(), { timezone: config.timezone }).map(plan => ({
+  const daily = dailyPlans(subscriptions.list(), { timezone: config.timezone });
+  const plans = [...daily, ...sourceFailurePlans(daily)].map(plan => ({
     ...plan, max_attempts: config.max_attempts ?? 3,
     timeout_ms: plan.handler === 'summarize' ? 900000 : plan.handler === 'push' ? 900000 : 180000,
-    recovery: plan.handler === 'push' ? 'unknown' : 'retry',
+    recovery: ['push', 'notify_source_failure'].includes(plan.handler) ? 'unknown' : 'retry',
     ...(plan.handler === 'push' ? { lateness_ms: (config.push_lateness_minutes ?? 60) * 60000 } : {})
   }));
   validatePlans(plans);
@@ -30,7 +31,8 @@ try {
   if (command === 'plan') {
     const day = validateDay(requestedDay ?? config.start_date ?? businessDay(new Date(), config.timezone));
     console.log(JSON.stringify({ business_date: day, plans: plans.map(plan => ({
-      task_id: plan.task_id, scheduled_at: scheduledInstant(day, plan.time, plan.timezone), depends_on: plan.depends_on
+      task_id: plan.task_id, scheduled_at: scheduledInstant(day, plan.time, plan.timezone), depends_on: plan.depends_on,
+      dependency_policy: plan.dependency_policy ?? 'succeeded'
     })) }, null, 2));
   } else if (command === 'status') {
     ledger = new SchedulerLedger(config.database);
@@ -51,6 +53,10 @@ try {
       collect: todayCollectionHandler({ subscriptions, directory: resolve(config.collection_directory), timezone: config.timezone }),
       summarize: summaryHandler({ directory: resolve(config.summary_directory), collectionDirectory: resolve(config.collection_directory),
         client, batchSize: config.summary_batch_size ?? 20 }),
+      notify_source_failure: sourceFailureHandler({ directory: resolve(config.delivery_directory, 'source-notices'),
+        deliveryDirectory: resolve(config.delivery_directory, 'source-notice-receipts'), target: config.target,
+        partBytes: config.push_part_bytes ?? 1500, intervalMs: config.push_interval_ms ?? 3000,
+        connect: () => wecomConnection(messagingConfig) }),
       push: pushHandler({ summaryDirectory: resolve(config.summary_directory), deliveryDirectory: resolve(config.delivery_directory),
         target: config.target, partBytes: config.push_part_bytes ?? 1500, intervalMs: config.push_interval_ms ?? 3000, connect: () => wecomConnection(messagingConfig) })
     };

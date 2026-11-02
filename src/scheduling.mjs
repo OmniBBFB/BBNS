@@ -8,7 +8,7 @@ export function dailyPlans(sources, { timezone = 'Asia/Shanghai' } = {}) {
     timezone: source.recommended_collection?.timezone ?? timezone, depends_on: []
   }));
   plans.push({ task_id: 'summarize', handler: 'summarize', time: '08:00', timezone,
-    depends_on: plans.map(plan => plan.task_id) });
+    depends_on: plans.map(plan => plan.task_id), dependency_policy: 'settled' });
   plans.push({ task_id: 'push', handler: 'push', time: '09:15', timezone, depends_on: ['summarize'] });
   for (const plan of plans) {
     if (!/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(plan.time)) throw invalid('Invalid schedule time: ' + plan.task_id, 'schedule.config');
@@ -16,6 +16,14 @@ export function dailyPlans(sources, { timezone = 'Asia/Shanghai' } = {}) {
     catch { throw invalid('Invalid schedule timezone: ' + plan.task_id, 'schedule.config'); }
   }
   return plans;
+}
+
+/** Failure notification has its own durable task and never gates content publication. */
+export function sourceFailurePlans(plans) {
+  return plans.filter(plan => plan.handler === 'collect').map(plan => ({
+    task_id: 'notify:' + plan.task_id, handler: 'notify_source_failure', config_ref: plan.config_ref,
+    time: plan.time, timezone: plan.timezone, depends_on: [plan.task_id], dependency_policy: 'settled'
+  }));
 }
 
 /** V2 workflow entry; existing deployed dailyPlans remains valid until an explicit cutover. */

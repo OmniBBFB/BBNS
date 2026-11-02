@@ -73,6 +73,10 @@ test('HTTP API is read-only, rejects traversal, and exposes no raw files or priv
     const head = await fetch(base + '/api/summaries', { method: 'HEAD' });
     assert.equal(head.status, 200); assert.equal(await head.text(), '');
     const html = await fetch(base); assert.equal(html.status, 200); assert.match(await html.text(), /每日简报/);
+    const statusModule = await fetch(base + '/source-status.mjs');
+    assert.equal(statusModule.status, 200);
+    assert.match(statusModule.headers.get('content-type'), /javascript/);
+    assert.match(await statusModule.text(), /export function sourceFailureText/);
     assert.equal(createHash('sha256').update(await readFile(path)).digest('hex'), before);
   } finally { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
 }));
