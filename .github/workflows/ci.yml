@@ -31,7 +31,7 @@ jobs:
       - name: Check deployment isolation and image selection
         run: python3 -m unittest discover -s test -p 'deployment_test.py'
       - name: Validate deployment configuration
-        run: BBNS_IMAGE=bbns:ci docker compose -f deploy/compose.yml config --no-env-resolution --quiet
+        run: python3 tools/check-compose.py
       - name: Build release image
         run: docker build --tag "bbns:${GITHUB_SHA}" .
       - name: Verify the production reader image without a worker or network

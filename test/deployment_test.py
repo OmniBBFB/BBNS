@@ -39,6 +39,23 @@ class DeploymentTest(unittest.TestCase):
             self.assertEqual(path.stat().st_mode & 0o777, 0o600)
             self.assertEqual(list(Path(directory).iterdir()), [path])
 
+    def test_snapshot_preserves_private_modes_ownership_and_symlinks(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source, target = Path(directory) / 'config', Path(directory) / 'snapshot'
+            source.mkdir(mode=0o700)
+            private = source / 'private.json'
+            private.write_text('{"fixture":true}')
+            private.chmod(0o600)
+            (source / 'link').symlink_to('private.json')
+            release.copy_tree_owned(source, target)
+            for old in [source, private]:
+                new = target / old.relative_to(source)
+                self.assertEqual(new.stat().st_uid, old.stat().st_uid)
+                self.assertEqual(new.stat().st_gid, old.stat().st_gid)
+                self.assertEqual(new.stat().st_mode & 0o777, old.stat().st_mode & 0o777)
+            self.assertEqual((target / 'private.json').read_text(), private.read_text())
+            self.assertEqual((target / 'link').readlink(), Path('private.json'))
+
 
 if __name__ == '__main__':
     unittest.main()

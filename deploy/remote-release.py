@@ -53,6 +53,16 @@ def run(command, *, cwd=None, input=None, timeout=180):
     return result.stdout.strip()
 
 
+def copy_tree_owned(source, destination):
+    shutil.copytree(source, destination, symlinks=True)
+    # copy2 preserves modes, but a root-created backup would otherwise change
+    # private UID-1000 files/directories to root ownership. Retain both so the
+    # isolated audit can read them using the production node user.
+    for path in [source, *source.rglob('*')]:
+        metadata = path.lstat()
+        os.chown(destination / path.relative_to(source), metadata.st_uid, metadata.st_gid, follow_symlinks=False)
+
+
 def has_active_tick(process_listing):
     return any(re.search(r'(?:^|/)(?:scheduler|workflow)-cli\.mjs\s+tick(?:\s|$)', line) for line in process_listing.splitlines())
 
@@ -117,8 +127,8 @@ def deploy(payload):
             # Cooperative shutdown; never run a second worker or a manual tick.
             stopped = True
             run(base + ['stop', '--timeout', '60', 'bbns-worker'], cwd=root, timeout=90)
-            shutil.copytree(root / 'bbns/data', backup / 'data', symlinks=True)
-            shutil.copytree(root / 'bbns/config', backup / 'config', symlinks=True)
+            copy_tree_owned(root / 'bbns/data', backup / 'data')
+            copy_tree_owned(root / 'bbns/config', backup / 'config')
             shutil.copy2(root / 'bbns/.env', backup / 'worker.env')
             (backup / 'worker.env').chmod(0o600)
             # Validate actual production configuration on a throw-away copy.
