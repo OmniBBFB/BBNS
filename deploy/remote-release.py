@@ -69,7 +69,18 @@ def has_active_tick(process_listing):
 
 def wait_for_idle(container, *, timeout=600):
     until = time.monotonic() + timeout
-    while has_active_tick(run(['docker', 'top', container, '-eo', 'args'])):
+    # Docker's host-side ps implementation differs across installations. Use
+    # the production Node runtime and procfs instead of host ps flags.
+    probe = r"""
+const fs=require('node:fs');
+for(const pid of fs.readdirSync('/proc').filter(p=>/^\d+$/.test(p))){
+ try{
+  const args=fs.readFileSync('/proc/'+pid+'/cmdline','utf8').split('\0');
+  if(args.includes('tick')&&args.some(a=>/(?:^|\/)(?:scheduler|workflow)-cli\.mjs$/.test(a)))console.log(args.join(' '));
+ }catch{}
+}
+"""
+    while has_active_tick(run(['docker', 'exec', container, 'node', '-e', probe])):
         if time.monotonic() >= until:
             raise RuntimeError('Worker is busy; existing deployment was left running')
         time.sleep(2)
