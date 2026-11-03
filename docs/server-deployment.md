@@ -34,11 +34,26 @@ docker compose up -d bbns-worker
 curl --fail https://news.omnibbfb.top/health
 ```
 
-## CI、升级与回滚
+## CI/CD、升级与回滚
 
-GitHub Actions 在 main push、PR 和手动运行时执行 npm ci、完整测试、Compose 校验和 Docker 构建。main/手动运行保留 `bbns-image-<commit>` 镜像下载产物 7 天；CI 不读取生产凭据，也不会自动替换服务器。下载产物后 `gzip -dc bbns-image.tar.gz | docker load`；镜像名为 `bbns:<完整提交号>`。
+GitHub Actions 在 main push、PR 和手动运行时执行 npm ci、完整测试、部署隔离测试、Compose 校验和 Docker 构建，再以合成配置、无网络、只读文件系统测试实际 reader 镜像。测试不读取生产凭据、不启动生产 worker。仅 main 的 push/手动运行将这个已验证镜像发布至 `ghcr.io/omnibbfb/bbns:sha-<commit>`，部署时选择发布后的 `@sha256:` 摘要。
 
-本地一键构建、上传并激活（该命令真实替换服务）：
+仓库变量 `BBNS_AUTO_DEPLOY=true` 启用自动部署；设为 `false` 可暂停更新，CI 和镜像发布仍照常运行。`production` 环境保存 `BBNS_DEPLOY_SSH_KEY`、`BBNS_DEPLOY_KNOWN_HOSTS` 两项 secret，以及 `BBNS_DEPLOY_HOST` 变量。BBNS 使用独立 Ed25519 key，服务器 `authorized_keys` 将其绑定到 `python3 /root/docker/main/bbns/deploy/remote-release.py`，加上 `restrict`；只接受 `deploy` 和本仓库固定摘要镜像，不开放 shell 或转发，不复用游戏站的部署私钥。
+
+首次接入已授权的 GitHub CLI 后，由管理员安装该部署入口、公钥并设置上述仓库/环境配置。服务器用当前 CI job 的临时 `GITHUB_TOKEN` 拉取镜像，凭据只写临时 Docker 配置并在拉取后清除；不保存个人 PAT。日常提交代码后执行 `git push origin main` 即可。运行结果见 [BBNS Actions](https://github.com/OmniBBFB/BBNS/actions/workflows/ci.yml)。
+
+自动部署依次执行：
+
+1. 获取项目发布锁，同时遵守共享 Compose 栈中游戏站的发布锁，避免两个项目同时替换服务。
+2. 拉取固定摘要镜像；等待当前 scheduler/workflow tick 空闲，最长 10 分钟，超时则保留旧服务。仅停止 `bbns-worker`，继续使用原有 SIGTERM 合作式取消机制。
+3. 保存主 `.env`、Compose、完整 `bbns/data`（包含 SQLite sidecar）、配置和凭据至 `bbns/backups/cicd-<timestamp>`；备份目录仅 root 可访问。
+4. 在无网络的新镜像中复制快照到临时文件系统，运行对应版本的 `check` 验证生产配置和账本。仅副本可写，不调用模型、不连接企微、不手动 tick、不恢复任务。
+5. 原子更新主 `.env` 的 **BBNS_IMAGE 一项**，核对其他 Compose 服务配置完全相同，先替换/检查 web，再启动单个 worker。现有配置、归档、任务账本和投递回执保留，不切换 v2，不回填历史或越过截止时间补发。
+6. 验证 worker 运行状态和公开 HTTPS；Nginx 配置无需修改。失败时恢复原镜像并重启旧服务，保留当前数据，绝不覆盖回执或自动重发。涉及存储格式不兼容的版本仍需另行安排迁移，不能依靠镜像回退撤销数据库变更。
+
+`deploy/remote-release.py` 是服务器受限入口。修改该入口本身需管理员维护通道重新安装，常规 CI 只部署应用镜像。私钥和本机验收文件位于被忽略的 `.local/`，不提交。
+
+原有本地构建、上传并激活入口继续保留供人工维护（该命令真实替换服务）：
 
 ```sh
 bash deploy/upload-image.sh bbns:release-20261028 root@123.56.248.107 \

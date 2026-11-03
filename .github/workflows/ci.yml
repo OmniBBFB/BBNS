@@ -1,4 +1,4 @@
-name: CI
+name: BBNS CI and release
 on:
   push:
     branches: [main]
@@ -8,30 +8,78 @@ permissions:
   contents: read
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 jobs:
   test-and-image:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image: ${{ steps.publish.outputs.image }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
         with:
           node-version: '24'
           cache: npm
       - run: npm ci
       - run: npm test
+      - name: Check deployment isolation and image selection
+        run: python3 -m unittest discover -s test -p 'deployment_test.py'
       - name: Validate deployment configuration
         run: BBNS_IMAGE=bbns:ci docker compose -f deploy/compose.yml config --no-env-resolution --quiet
       - name: Build release image
-        run: docker build --tag bbns:${{ github.sha }} .
-      - name: Save image for SSH upload
-        if: github.event_name != 'pull_request'
-        run: docker save bbns:${{ github.sha }} | gzip > bbns-image.tar.gz
-      - uses: actions/upload-artifact@v4
-        if: github.event_name != 'pull_request'
-        with:
-          name: bbns-image-${{ github.sha }}
-          path: bbns-image.tar.gz
-          compression-level: 0
-          retention-days: 7
+        run: docker build --tag "bbns:${GITHUB_SHA}" .
+      - name: Verify the production reader image without a worker or network
+        run: python3 tools/check-image.py "bbns:${GITHUB_SHA}"
+      - name: Publish the verified image
+        id: publish
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        env:
+          REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          image="ghcr.io/omnibbfb/bbns:sha-${GITHUB_SHA}"
+          printf '%s' "$REGISTRY_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+          docker tag "bbns:${GITHUB_SHA}" "$image"
+          docker push "$image"
+          digest=$(docker image inspect "$image" --format '{{range .RepoDigests}}{{println .}}{{end}}' | awk '/^ghcr.io\/omnibbfb\/bbns@sha256:/{print; exit}')
+          test -n "$digest"
+          printf 'image=%s\n' "$digest" >> "$GITHUB_OUTPUT"
+          printf 'Published verified image `%s`\n' "$digest" >> "$GITHUB_STEP_SUMMARY"
+  deploy:
+    needs: test-and-image
+    if: needs.test-and-image.outputs.image != '' && vars.BBNS_AUTO_DEPLOY == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment: production
+    permissions:
+      packages: read
+    steps:
+      - name: Deploy BBNS reader and single worker
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.BBNS_DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.BBNS_DEPLOY_KNOWN_HOSTS }}
+          DEPLOY_HOST: ${{ vars.BBNS_DEPLOY_HOST }}
+          IMAGE: ${{ needs.test-and-image.outputs.image }}
+          REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "$DEPLOY_SSH_KEY"
+          test -n "$DEPLOY_KNOWN_HOSTS"
+          test -n "$DEPLOY_HOST"
+          install -d -m 700 "$RUNNER_TEMP/bbns-ssh"
+          trap 'rm -f "$RUNNER_TEMP/bbns-ssh/key"' EXIT
+          printf '%s\n' "$DEPLOY_SSH_KEY" > "$RUNNER_TEMP/bbns-ssh/key"
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > "$RUNNER_TEMP/bbns-ssh/known_hosts"
+          chmod 600 "$RUNNER_TEMP/bbns-ssh/key"
+          python3 -c 'import json,os; print(json.dumps({"image":os.environ["IMAGE"],"actor":os.environ["GITHUB_ACTOR"],"registryToken":os.environ["REGISTRY_TOKEN"]}))' |
+            ssh -i "$RUNNER_TEMP/bbns-ssh/key" -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$RUNNER_TEMP/bbns-ssh/known_hosts" "$DEPLOY_HOST" deploy
+      - name: Check the public reader
+        run: |
+          curl --fail --silent --show-error --retry 5 --retry-delay 2 https://news.omnibbfb.top/health
+          curl --fail --silent --show-error --output /dev/null --retry 5 --retry-delay 2 https://news.omnibbfb.top/api/summaries

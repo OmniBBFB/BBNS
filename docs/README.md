@@ -30,3 +30,7 @@
 [本轮开发验证](verification-20261027.md)：离线测试、浏览器验收、窗口回放及未验证范围。
 
 [Docker 服务器部署](server-deployment.md)：CI、镜像、公开域名、持久化与迁移。
+
+## 自动部署
+
+服务器运行说明见 [server-deployment.md](server-deployment.md)。配置一次生产部署授权后，提交代码并推送 `main` 即自动测试、发布 GHCR 镜像和更新 `bbns-web` / `bbns-worker`；PR 只检查。BBNS 使用独立受限 SSH key，生产配置、账本和投递回执继续留在服务器。

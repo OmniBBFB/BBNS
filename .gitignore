@@ -6,3 +6,5 @@ node_modules/
 
 data/
 config/message.json
+.local/
+__pycache__/

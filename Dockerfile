@@ -4,6 +4,7 @@ COPY package.json package-lock.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 
 FROM node:24-bookworm-slim AS runtime
+LABEL org.opencontainers.image.source="https://github.com/OmniBBFB/BBNS"
 ENV NODE_ENV=production TZ=Asia/Shanghai
 WORKDIR /app
 COPY --from=dependencies /app/node_modules ./node_modules
