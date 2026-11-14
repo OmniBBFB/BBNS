@@ -31,6 +31,8 @@
 
 [Docker 服务器部署](server-deployment.md)：CI、镜像、公开域名、持久化与迁移。
 
+[网页变化监控](change-monitoring.md)：changedetection.io 的三个监控项、RSS 接入、初始化状态和维护。
+
 ## 自动部署
 
 服务器运行说明见 [server-deployment.md](server-deployment.md)。配置一次生产部署授权后，提交代码并推送 `main` 即自动测试、发布 GHCR 镜像和更新 `bbns-web` / `bbns-worker`；PR 只检查。BBNS 使用独立受限 SSH key，生产配置、账本和投递回执继续留在服务器。

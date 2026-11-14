@@ -18,6 +18,7 @@ export class HttpClient {
         const error = new Error(`HTTP ${response.status}`);
         error.http_status = response.status;
         error.retry_after = response.headers.get('retry-after');
+        if (response.status === 400) error.response_body = (await response.text()).slice(0, 2048);
         throw error;
       }
       return { text: await response.text(), metadata: {
@@ -45,6 +46,29 @@ export class RssAdapter {
             completeness: item['content:encoded'] ? 'full' : 'summary' }
         }, fetched_at)) };
     }, { kind: 'validation', signal });
+  }
+}
+
+/** A watch feed describes changes, rather than the full articles it links to. */
+export class ChangedetectionAdapter extends RssAdapter {
+  async collect(request, context) {
+    let result;
+    try { result = await super.collect(request, context); }
+    catch (error) {
+      const uuid = new URL(request.options.url).pathname.match(/^\/rss\/watch\/([0-9a-f-]{36})$/i)?.[1];
+      const initial = `Watch ${uuid} does not have enough history snapshots to show changes (need at least 2)`;
+      if (uuid && error.http_status === 400 && error.response_body?.trim() === initial) {
+        return { messages: [], metadata: { state: 'waiting_for_history' }, truncated: false };
+      }
+      throw error;
+    }
+    return { ...result, messages: result.messages.map(message => ({
+      ...message, kind: 'observation',
+      title: request.options.title ? request.options.title + ' 更新' : message.title,
+      observed_at: message.published_at,
+      content: { ...message.content, completeness: 'summary' },
+      data: { ...message.data, event_type: 'webpage_change', detected_at: message.published_at }
+    })) };
   }
 }
 
@@ -117,5 +141,6 @@ export class GithubTrendingAdapter {
 }
 
 export function defaultAdapters(http = new HttpClient()) {
-  return { rss: new RssAdapter(http), aihot: new AihotAdapter(http), github_trending: new GithubTrendingAdapter(http) };
+  return { rss: new RssAdapter(http), changedetection: new ChangedetectionAdapter(http),
+    aihot: new AihotAdapter(http), github_trending: new GithubTrendingAdapter(http) };
 }

@@ -1,6 +1,19 @@
 # Project directory is ~/docker/main; this file lives at bbns/compose.yml there.
 # Services can also be merged into the existing main docker-compose.yml.
 services:
+  changedetection:
+    image: ${CHANGEDETECTION_IMAGE:-ghcr.io/dgtlmoon/changedetection.io:0.70.3}
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Shanghai
+      FETCH_WORKERS: "1"
+      LLM_FEATURES_DISABLED: "true"
+      DISABLE_VERSION_CHECK: "true"
+    mem_limit: 384m
+    volumes:
+      - ./changedetection/data:/datastore
+    ports: ["127.0.0.1:5000:5000"]
+    networks: [feeds]
   bbns-web:
     image: ${BBNS_IMAGE:?Set BBNS_IMAGE to an immutable release tag}
     init: true
@@ -35,11 +48,16 @@ services:
     volumes:
       - ./bbns/config:/app/config:ro
       - ./bbns/data:/app/data
-    networks: [nginx_net]
+    networks: [nginx_net, feeds]
+    depends_on:
+      changedetection:
+        condition: service_started
     stop_grace_period: 60s
     logging:
       driver: json-file
       options: {max-size: 10m, max-file: '3'}
 networks:
+  feeds:
+    driver: bridge
   nginx_net:
     external: true

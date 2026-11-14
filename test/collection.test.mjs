@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Subscriptions } from '../src/subscriptions.mjs';
 import { CollectionExecutor } from '../src/collection.mjs';
-import { AihotAdapter, RssAdapter, GithubTrendingAdapter, HttpClient } from '../src/source-adapters.mjs';
+import { AihotAdapter, RssAdapter, ChangedetectionAdapter, GithubTrendingAdapter, HttpClient } from '../src/source-adapters.mjs';
 import { sourceMessage } from '../src/source-message.mjs';
 import { JsonlMessageStore } from '../src/jsonl-store.mjs';
 const now = '2026-10-23T08:00:00Z';
@@ -35,6 +35,36 @@ test('RSS parses entities, CDATA, GUID attributes and summary without inventing 
   assert.equal(message.content.completeness, 'summary');
   assert.equal(message.published_at, '2026-10-23T00:00:00.000Z');
   await assert.rejects(new RssAdapter(fixtureHttp('<html/>')).collect(request('rss'), { fetched_at: now }), /RSS/);
+});
+
+test('change feeds retain event identity and detected time without claiming article full text', async () => {
+  const xml = `<rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/"><channel><item>
+    <title>Watch changed</title><link>https://example.com/cookbook/</link><guid isPermaLink="false">watch/1794630000</guid>
+    <pubDate>Sat, 14 Nov 2026 04:00:00 GMT</pubDate>
+    <content:encoded><![CDATA[<pre>Added: New recipe https://example.com/cookbook/new</pre>]]></content:encoded>
+    </item></channel></rss>`;
+  const req = { ...request('changedetection'), options: { title: 'Cookbook' } };
+  const [m] = (await new ChangedetectionAdapter(fixtureHttp(xml)).collect(req, { fetched_at: now })).messages;
+  assert.equal(m.source_item_id, 'watch/1794630000');
+  assert.equal(m.kind, 'observation'); assert.equal(m.title, 'Cookbook 更新');
+  assert.equal(m.published_at, '2026-11-14T04:00:00.000Z'); assert.equal(m.observed_at, m.published_at);
+  assert.equal(m.content.completeness, 'summary'); assert.match(m.content.text, /https:\/\/example.com\/cookbook\/new/);
+  assert.equal(m.data.event_type, 'webpage_change');
+  assert.equal((await new RssAdapter(fixtureHttp(xml)).collect(request('rss'), { fetched_at: now })).messages[0].content.completeness, 'full');
+});
+
+test('only the watch-specific insufficient-history response is an empty change feed', async () => {
+  const uuid = '3e2598e0-174c-4b9f-9859-c9d9798fb1be';
+  const initial = `Watch ${uuid} does not have enough history snapshots to show changes (need at least 2)`;
+  const req = { ...request('changedetection'), options: { url: `http://changedetection:5000/rss/watch/${uuid}?token=test` } };
+  const adapter = (body, status) => new ChangedetectionAdapter(new HttpClient({
+    fetchImpl: async () => new Response(body, { status })
+  }));
+  const result = await adapter(initial, 400).collect(req, { fetched_at: now });
+  assert.deepEqual(result.messages, []); assert.equal(result.metadata.state, 'waiting_for_history');
+  for (const [body, status] of [['Bad request', 400], [initial.replace(uuid, 'another-watch'), 400], ['Forbidden', 403], ['Server error', 500]]) {
+    await assert.rejects(adapter(body, status).collect(req, { fetched_at: now }), error => error.http_status === status);
+  }
 });
 
 test('AIHOT follows pagination up to requested limit and retains attribution', async () => {

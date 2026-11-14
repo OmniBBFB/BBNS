@@ -37,6 +37,7 @@ npm run collect -- config/subscriptions.example.json rqdmap
 | --- | --- | --- |
 | `aihot` | `mode`（selected/all）、`window`（24h/7d）、可选 category | 使用 items API 按返回游标分页，到来源结束或 limit；不跨批次保存游标 |
 | `rss` | `url` | RSS 2.0；默认读取 description 摘要，有 content:encoded 则标记全文；转换为纯文本，不补抓详情页 |
+| `changedetection` | `url`、可选 `title` | changedetection.io 单项历史 RSS；保存为网页变化观测和变化摘要，`pubDate` 表示检测时间。仅将当前 watch 的“历史快照不足”400 响应识别为空历史，其他错误照常报告 |
 | `github_trending` | 可选 language（GitHub URL 中的语言名称） | 获取 since=daily 榜单快照，保留顺序；页面结构不匹配时显式失败 |
 
 limit 是单次条数上限，不是去重或时间策略。结果的 `truncated` 表示仍有条目被上限截断；RSS 不承诺完整历史，GitHub 只返回网站当前榜单。AIHOT 时间窗由来源定义。

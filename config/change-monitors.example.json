@@ -1,0 +1,28 @@
+{
+  "monitors": [
+    {
+      "id": "claude-cookbook-updates",
+      "title": "Claude Cookbook",
+      "url": "https://platform.claude.com/cookbook/",
+      "include_filters": [
+        "xpath:for-each(//a[starts-with(@href, '/cookbook/') and not(contains(@href, '?')) and @href != '/cookbook/']/@href, function($a) { concat('https://platform.claude.com', $a) })"
+      ]
+    },
+    {
+      "id": "openai-developer-updates",
+      "title": "OpenAI Developer Blog",
+      "url": "https://developers.openai.com/blog",
+      "include_filters": [
+        "xpath:for-each(//a[starts-with(@href, '/blog/') or starts-with(@href, 'https://developers.openai.com/blog/')]/@href, function($a) { if (starts-with($a, 'http')) then string($a) else concat('https://developers.openai.com', $a) })"
+      ]
+    },
+    {
+      "id": "openai-engineering-updates",
+      "title": "OpenAI Engineering",
+      "url": "https://openai.com/news/engineering/",
+      "include_filters": [
+        "xpath:for-each(//main//a[starts-with(@href, '/index/') or starts-with(@href, 'https://openai.com/index/')]/@href, function($a) { if (starts-with($a, 'http')) then string($a) else concat('https://openai.com', $a) })"
+      ]
+    }
+  ]
+}
