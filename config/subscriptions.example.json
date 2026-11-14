@@ -37,6 +37,84 @@
         "note": "建议每日一次；榜单为获取时快照"
       },
       "options": {}
+    },
+    {
+      "id": "rss-google-deepmind",
+      "adapter": "rss",
+      "enabled": true,
+      "limit": 100,
+      "recommended_collection": {
+        "timezone": "Asia/Shanghai",
+        "note": "每日一次，与现有日报一同采集"
+      },
+      "options": {
+        "url": "https://deepmind.google/blog/rss.xml"
+      }
+    },
+    {
+      "id": "rss-nvidia-blog",
+      "adapter": "rss",
+      "enabled": true,
+      "limit": 100,
+      "recommended_collection": {
+        "timezone": "Asia/Shanghai",
+        "note": "每日一次，与现有日报一同采集"
+      },
+      "options": {
+        "url": "https://blogs.nvidia.com/feed/"
+      }
+    },
+    {
+      "id": "rss-github-ai",
+      "adapter": "rss",
+      "enabled": true,
+      "limit": 100,
+      "recommended_collection": {
+        "timezone": "Asia/Shanghai",
+        "note": "每日一次，与现有日报一同采集"
+      },
+      "options": {
+        "url": "https://github.blog/ai-and-ml/feed/"
+      }
+    },
+    {
+      "id": "rss-bair",
+      "adapter": "rss",
+      "enabled": true,
+      "limit": 100,
+      "recommended_collection": {
+        "timezone": "Asia/Shanghai",
+        "note": "每日一次，与现有日报一同采集"
+      },
+      "options": {
+        "url": "https://bair.berkeley.edu/blog/feed.xml"
+      }
+    },
+    {
+      "id": "rss-latent-space",
+      "adapter": "rss",
+      "enabled": true,
+      "limit": 100,
+      "recommended_collection": {
+        "timezone": "Asia/Shanghai",
+        "note": "每日一次，与现有日报一同采集"
+      },
+      "options": {
+        "url": "https://www.latent.space/feed"
+      }
+    },
+    {
+      "id": "rss-claude-dev",
+      "adapter": "rss",
+      "enabled": true,
+      "limit": 100,
+      "recommended_collection": {
+        "timezone": "Asia/Shanghai",
+        "note": "每日一次，与现有日报一同采集"
+      },
+      "options": {
+        "url": "https://claude.dev/rss.xml"
+      }
     }
   ],
   "storage": {
